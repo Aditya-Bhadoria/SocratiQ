@@ -35,21 +35,17 @@ export async function POST(req: Request) {
 
     // Format for Gemini
     const geminiMessages = messages.map((m: any, index: number) => {
-      const parts: any[] = [{ text: m.content }];
+      // FIX: Gemini API crashes if text is entirely empty, so we default to a space
+      const parts: any[] = [{ text: m.content || " " }]; 
       
-      // If this is the LAST message and the user attached an image, add it to the payload
       if (index === messages.length - 1 && imageBase64) {
         const matches = imageBase64.match(/^data:(image\/[a-z]+);base64,(.+)$/i);
         if (matches && matches.length === 3) {
           parts.push({
-            inlineData: {
-              mimeType: matches[1],
-              data: matches[2] // The raw base64 string
-            }
+            inlineData: { mimeType: matches[1], data: matches[2] }
           });
         }
       }
-      
       return { role: m.role === 'assistant' ? 'model' : 'user', parts };
     });
 
@@ -79,7 +75,31 @@ export async function POST(req: Request) {
     });
 
     const data = await response.json();
-    if (!response.ok) throw new Error("Gemini Error");
+    
+    // GRACEFUL ERROR HANDLING
+    if (!response.ok) {
+      const errorMessage = data.error?.message || "";
+      console.error("🔥 RAW GOOGLE ERROR:", JSON.stringify(data, null, 2));
+      
+      // Catch your personal rate limit
+      if (errorMessage.toLowerCase().includes("quota") || response.status === 429) {
+        return NextResponse.json({ 
+          reply: "Whoa there! I'm processing a lot of thoughts right now and need a quick 60-second breather. Let's pause for a moment, and try asking me again in a minute!" 
+        }, { status: 429 });
+      }
+
+      // Catch Google's global server overload
+      if (errorMessage.toLowerCase().includes("high demand") || response.status === 503) {
+        return NextResponse.json({ 
+          reply: "My brain is experiencing a global traffic jam right now! Google's servers are super busy. Let's give it a couple of minutes and try again." 
+        }, { status: 503 });
+      }
+
+      // Generic fallback
+      return NextResponse.json({ 
+        reply: `Oops, my circuits got crossed. (Error: ${errorMessage})` 
+      }, { status: 500 });
+    }
 
     const aiReply = data.candidates[0].content.parts[0].text;
 
