@@ -1,21 +1,44 @@
 import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
 
 export async function POST(req: Request) {
   try {
-    const { messages } = await req.json();
+    // We now expect the frontend to pass the userEmail and the current chatId
+    const { messages, userEmail, chatId } = await req.json();
     const apiKey = process.env.GOOGLE_GENERATION_AI_API_KEY;
 
-    if (!apiKey) {
-      return NextResponse.json({ reply: "Gemini API key missing in .env file." }, { status: 500 });
+    if (!apiKey) return NextResponse.json({ reply: "API key missing." }, { status: 500 });
+    if (!userEmail) return NextResponse.json({ reply: "Please log in to chat." }, { status: 401 });
+
+    // 1. Verify the user exists in your Supabase DB
+    const user = await prisma.user.findUnique({ where: { email: userEmail } });
+    if (!user) return NextResponse.json({ reply: "User not found." }, { status: 404 });
+
+    // 2. Check if this is a brand new chat. If so, create a new row in the Chat table.
+    let currentChatId = chatId;
+    const lastUserMessage = messages[messages.length - 1].content;
+
+    if (!currentChatId) {
+      const newChat = await prisma.chat.create({
+        data: {
+          userId: user.id,
+          title: lastUserMessage.substring(0, 30) + (lastUserMessage.length > 30 ? "..." : ""),
+        }
+      });
+      currentChatId = newChat.id;
     }
 
-    // Format your React messages into the exact structure Gemini requires
+    // 3. Save the User's exact message to the DB
+    await prisma.message.create({
+      data: { chatId: currentChatId, role: "user", content: lastUserMessage }
+    });
+
+    // 4. Send the conversation to Gemini 2.5 Flash
     const geminiMessages = messages.map((m: any) => ({
       role: m.role === 'assistant' ? 'model' : 'user',
       parts: [{ text: m.content }]
     }));
 
-    // Make a direct web request to Google's Gemini REST API
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -37,26 +60,25 @@ export async function POST(req: Request) {
           ]
         },
         contents: geminiMessages,
-        generationConfig: { temperature: 0.7 } 
+        generationConfig: { temperature: 0.7 }
       }),
     });
 
     const data = await response.json();
+    if (!response.ok) throw new Error("Gemini Error");
 
-    // IF GOOGLE REJECTS IT, SHOW THE EXACT ERROR IN THE CHAT
-    if (!response.ok) {
-      console.error("🔥 GEMINI API ERROR:", JSON.stringify(data, null, 2));
-      return NextResponse.json({ 
-        reply: `Google Error: ${data.error?.message || "Unknown error. Check VS Code terminal."}` 
-      }, { status: 500 });
-    }
+    const aiReply = data.candidates[0].content.parts[0].text;
 
-    // Extract the AI's message and send it back to your React frontend
-    const reply = data.candidates[0].content.parts[0].text;
-    return NextResponse.json({ reply });
+    // 5. Save the AI's reply to the DB
+    await prisma.message.create({
+      data: { chatId: currentChatId, role: "assistant", content: aiReply }
+    });
+
+    // 6. Return the reply AND the chat ID so the frontend can lock onto this conversation
+    return NextResponse.json({ reply: aiReply, chatId: currentChatId });
 
   } catch (error) {
     console.error("Server Error:", error);
-    return NextResponse.json({ reply: "An unexpected server error occurred." }, { status: 500 });
+    return NextResponse.json({ reply: "An unexpected error occurred." }, { status: 500 });
   }
 }
