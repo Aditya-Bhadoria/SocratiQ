@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useSession, signOut } from "next-auth/react";
-import { Send, LogOut, MessageSquare, PlusCircle, Trash2, Edit2, Check, X, Paperclip, Image as ImageIcon } from "lucide-react";
+import { Send, LogOut, MessageSquare, PlusCircle, Trash2, Edit2, Check, X, Paperclip, Image as ImageIcon, Download } from "lucide-react";
 import Link from "next/link";
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -45,7 +45,6 @@ export default function SocratiQChat() {
     }
   };
 
-  // --- IMAGE HANDLING ---
   const processFile = (file: File) => {
     if (file && file.type.startsWith('image/')) {
       const reader = new FileReader();
@@ -61,17 +60,8 @@ export default function SocratiQChat() {
     if (file) processFile(file);
   };
 
-  // --- DRAG AND DROP HANDLERS ---
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-  };
-
+  const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(true); };
+  const handleDragLeave = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(false); };
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
@@ -106,20 +96,17 @@ export default function SocratiQChat() {
     setIsLoading(true);
 
     try {
-      // 1. Strip the massive image strings out of the history to prevent 4MB payload crashes!
-      const cleanHistory = [...messages, userMessage].map(m => ({
-        role: m.role,
-        content: m.content
-      }));
+      // Clean history for the backend
+      const cleanHistory = [...messages, userMessage].map(m => ({ role: m.role, content: m.content }));
 
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
-          messages: cleanHistory, // Send the lightweight history
+          messages: cleanHistory,
           userEmail: session?.user?.email,
           chatId: currentChatId,
-          imageBase64: currentImage // Send the new image directly
+          imageBase64: currentImage
         }),
       });
 
@@ -138,7 +125,6 @@ export default function SocratiQChat() {
     }
   };
 
-  // Chat management functions
   const deleteChat = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!confirm("Are you sure you want to delete this chat?")) return;
@@ -168,9 +154,9 @@ export default function SocratiQChat() {
   );
 
   return (
-    <div className="flex h-screen bg-gray-950 text-white">
-      {/* Sidebar */}
-      <div className="w-64 bg-gray-900 border-r border-gray-800 flex flex-col p-4">
+    <div className="flex h-screen bg-gray-950 text-white print:bg-white print:text-black">
+      
+      <div className="w-64 bg-gray-900 border-r border-gray-800 flex flex-col p-4 print:hidden">
         <h1 className="text-xl font-bold mb-6 text-blue-500">SocratiQ</h1>
         <button onClick={() => { setCurrentChatId(null); setMessages([]); setSelectedImage(null); }} className="w-full flex items-center gap-2 bg-blue-600/10 text-blue-500 hover:bg-blue-600/20 py-2 px-3 rounded-lg mb-6 transition">
           <PlusCircle size={18} /> New Chat
@@ -218,38 +204,59 @@ export default function SocratiQChat() {
         </div>
       </div>
 
-      {/* Main Chat Area - WITH DRAG AND DROP */}
       <div 
-        className="flex-1 flex flex-col relative"
+        className="flex-1 flex flex-col relative print:block"
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
-        {/* Drag Overlay */}
         {isDragging && (
-          <div className="absolute inset-0 z-50 bg-blue-500/10 border-4 border-dashed border-blue-500 flex flex-col items-center justify-center backdrop-blur-sm">
+          <div className="absolute inset-0 z-50 bg-blue-500/10 border-4 border-dashed border-blue-500 flex flex-col items-center justify-center backdrop-blur-sm print:hidden">
             <ImageIcon size={64} className="text-blue-500 mb-4 animate-bounce" />
             <h2 className="text-3xl font-bold text-blue-500">Drop image here</h2>
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto p-6 space-y-6 pb-40">
+        {messages.length > 0 && (
+          <div className="w-full flex justify-end p-4 print:hidden absolute top-0 right-0 z-10">
+            <button 
+              onClick={() => window.print()}
+              className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 text-gray-300 px-4 py-2 rounded-lg text-sm transition shadow-lg border border-gray-700"
+            >
+              <Download size={16} /> Export to PDF
+            </button>
+          </div>
+        )}
+
+        <div className="flex-1 overflow-y-auto p-6 space-y-6 pb-40 print:p-0 print:overflow-visible pt-16 print:pt-0">
+          
+          <div className="hidden print:block mb-8 border-b pb-4">
+            <h1 className="text-2xl font-bold text-black">SocratiQ Study Guide</h1>
+            <p className="text-gray-500 text-sm">Exported on {new Date().toLocaleDateString()}</p>
+          </div>
+
           {messages.length === 0 && (
-            <div className="h-full flex flex-col items-center justify-center text-center">
+            <div className="h-full flex flex-col items-center justify-center text-center print:hidden">
               <h2 className="text-2xl font-semibold mb-2">What are we learning today?</h2>
               <p className="text-gray-400 max-w-sm">Upload a screenshot of a problem, or ask a question directly.</p>
             </div>
           )}
+          
           {messages.map((m) => (
-             <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-               <div className={`max-w-[80%] p-4 rounded-2xl ${m.role === 'user' ? 'bg-blue-600 text-white' : 'bg-gray-800 border border-gray-700 text-gray-200'}`}>
+             <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end print:justify-start' : 'justify-start'} print:break-inside-avoid`}>
+
+               <div className={`max-w-[80%] print:max-w-full p-4 rounded-2xl ${
+                 m.role === 'user' 
+                  ? 'bg-blue-600 text-white print:bg-gray-100 print:text-black print:border print:border-gray-300' 
+                  : 'bg-gray-800 border border-gray-700 text-gray-200 print:bg-white print:text-black print:border-none print:p-0'
+               }`}>
                  {m.imageUrl && (
-                   <img src={m.imageUrl} alt="Uploaded attachment" className="max-w-md rounded-lg mb-3 border border-white/20 shadow-lg" />
+                   <img src={m.imageUrl} alt="Uploaded attachment" className="max-w-md rounded-lg mb-3 shadow-lg print:shadow-none print:border print:border-gray-300" />
                  )}
                  {m.role === 'user' ? (
-                   <span className="whitespace-pre-wrap">{m.content}</span>
+                   <span className="whitespace-pre-wrap font-medium">{m.content}</span>
                  ) : (
-                   <div className="prose prose-invert max-w-none prose-p:leading-relaxed prose-pre:bg-gray-900 prose-pre:border prose-pre:border-gray-700 prose-a:text-blue-400">
+                   <div className="prose prose-invert print:prose-neutral max-w-none prose-p:leading-relaxed prose-pre:bg-gray-900 print:prose-pre:bg-gray-100 print:prose-pre:text-black prose-pre:border prose-pre:border-gray-700 print:prose-pre:border-gray-300 prose-a:text-blue-400 print:prose-a:text-blue-600">
                      <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{m.content}</ReactMarkdown>
                    </div>
                  )}
@@ -257,17 +264,14 @@ export default function SocratiQChat() {
              </div>
           ))}
           {isLoading && (
-            <div className="flex justify-start">
+            <div className="flex justify-start print:hidden">
               <div className="max-w-[80%] p-4 rounded-2xl bg-gray-800 border border-gray-700 text-gray-400">SocratiQ is thinking...</div>
             </div>
           )}
         </div>
 
-        {/* Input Bar with Image Preview */}
-        <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-gray-950 via-gray-950 to-transparent">
+        <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-gray-950 via-gray-950 to-transparent print:hidden">
           <div className="max-w-3xl mx-auto">
-            
-            {/* Image Preview Window */}
             {selectedImage && (
               <div className="mb-3 relative inline-block">
                 <img src={selectedImage} alt="Preview" className="h-24 w-auto rounded-lg border-2 border-blue-500 object-cover shadow-lg" />
@@ -276,23 +280,10 @@ export default function SocratiQChat() {
                 </button>
               </div>
             )}
-
             <form onSubmit={handleSubmit} className="relative flex items-center gap-2 shadow-xl">
-              <input 
-                type="file" 
-                accept="image/*" 
-                ref={fileInputRef} 
-                onChange={handleImageUpload} 
-                className="hidden" 
-              />
-              
+              <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} className="hidden" />
               <div className="relative flex-1">
-                <button 
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="absolute left-4 top-[18px] text-gray-400 hover:text-blue-400 transition"
-                  title="Upload image"
-                >
+                <button type="button" onClick={() => fileInputRef.current?.click()} className="absolute left-4 top-[18px] text-gray-400 hover:text-blue-400 transition" title="Upload image">
                   <Paperclip size={20} />
                 </button>
                 <input
@@ -302,11 +293,7 @@ export default function SocratiQChat() {
                   disabled={isLoading}
                   className="w-full bg-gray-900 border border-gray-700 rounded-xl py-4 pl-14 pr-14 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition disabled:opacity-50"
                 />
-                <button 
-                  type="submit" 
-                  disabled={isLoading || (!input.trim() && !selectedImage)}
-                  className="absolute right-3 top-3 p-2 bg-blue-600 rounded-lg hover:bg-blue-500 transition disabled:opacity-50 disabled:hover:bg-blue-600"
-                >
+                <button type="submit" disabled={isLoading || (!input.trim() && !selectedImage)} className="absolute right-3 top-3 p-2 bg-blue-600 rounded-lg hover:bg-blue-500 transition disabled:opacity-50 disabled:hover:bg-blue-600">
                   <Send size={18} />
                 </button>
               </div>

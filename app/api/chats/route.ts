@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
-// GET ALL CHATS
+// Get all chats
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
@@ -25,7 +25,7 @@ export async function GET(req: Request) {
   }
 }
 
-// DELETE ALL CHATS (Clear History)
+// Clear History
 export async function DELETE(req: Request) {
   try {
     const url = new URL(req.url);
@@ -36,7 +36,6 @@ export async function DELETE(req: Request) {
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
-    // This will delete all chats, and Supabase will automatically Cascade-delete all messages inside them!
     await prisma.chat.deleteMany({
       where: { userId: user.id }
     });
