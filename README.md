@@ -62,9 +62,11 @@ Supports Markdown + LaTeX equations so mathematical expressions and code snippet
 
 ### 1️⃣ Clone the repository
 
+```bash
 git clone https:github.com/aditya-bhadoria/SocratiQ.git
 cd socratiq
 npm install
+```
 ---
 
 ### 2️⃣ Create environment variables
@@ -83,21 +85,24 @@ NEXTAUTH_SECRET="your_random_secret"
 ---
 
 ### 3️⃣ Sync Prisma database
-
+```bash
 npx prisma generate
 npx prisma db push
+```
 ---
 
 ### 4️⃣ Start the development server
-
+```bash
 npm run dev
+```
 ---
 
 ### 5️⃣ Open the application
 
 Visit:
-
+```
 http:localhost:3000
+```
 ---
 
 ## ⭐ If you like this project
