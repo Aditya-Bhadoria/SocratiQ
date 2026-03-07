@@ -73,6 +73,7 @@ npm install
 
 Create a .env file in the root directory.
 
+```env
 DATABASE_URL="your_database_url"
 DIRECT_URL="your_supabase_direct_url"
 
@@ -82,6 +83,7 @@ GITHUB_ID="your_github_oauth_id"
 GITHUB_SECRET="your_github_oauth_secret"
 
 NEXTAUTH_SECRET="your_random_secret"
+```
 ---
 
 ### 3️⃣ Sync Prisma database
